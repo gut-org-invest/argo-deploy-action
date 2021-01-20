@@ -1,0 +1,47 @@
+# -*- yml -*-
+
+# The `workflow` defines what the intent of this build file is. Usually you name
+# it something like `deploy` or `build`. It will then have various actions which
+# will execute in a loop.
+
+
+
+# `on` indicates the event upon which you should run this workflow. It could be
+# as simple as push, but sometimes you want to execute a workflow on merge, for
+# instance to check that your service is running, or on deployment.  For a list
+# of available events see [the docs]
+on: push
+
+# The name of your workflow, this will appear in the actions tab when viewing
+# its status.
+name: Fortune
+jobs:
+  pushFortuneImage:
+    name: Push Fortune Image
+
+    # We use a default linux container for our image because we are using docker
+    # in our build. In cases when you need to test cross-platform compatibility
+    # it is possible to use Mac and Windows instead.
+    runs-on: ubuntu-latest
+
+    # Steps is simply an array of actions to be executed
+    steps:
+    # Before we proceed to do something dramatic, we copy our origional code
+    # from GitHub into our environment so we can use it later.
+    - uses: actions/checkout@master
+
+    # Uses defines the action to be run, this can either be a repository with
+    # a Dockerfile which will be built on demand and than execute code based
+    # on your arguments or a simple docker image. For information on
+    # specifying these cases see [the docs].
+    #
+    # In this case we are using sevenmind/velociraptor to push our image to
+    # the 7mind container registry. For more information check out
+    # https://github.com/sevenmind/velociraptor
+    - uses: sevenmind/velociraptor@master
+      with:
+        key: ${{ secrets.RAPTOR_KEY }}
+        registry: eu.gcr.io/mind-f62c0
+
+# [the docs]
+# https://help.github.com/en/articles/configuring-a-workflow
