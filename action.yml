@@ -1,21 +1,46 @@
 name: 'Hello World'
 description: 'Greet someone'
+
 inputs:
-  who-to-greet:  # id of input
-    description: 'Who to greet'
+
+  helm-repo-url-path:
+    description: 'URL path of the repository holding the helm chart definitions in the format sevemind/kubernetes'
     required: true
-    default: 'World'
-outputs:
-  random-number:
-    description: "Random number"
-    value: ${{ steps.random-number-generator.outputs.random-id }}
+  helm-repo-branch:
+    description: 'Helm repo branch to work on'
+    required: true
+    default: master
+  chart-path:
+    description: 'Path inside the helm-repo to a specific chart'
+    required: false
+    default: "/"
+  override-key:
+    description: 'key to override'
+    required: true
+    default: 'image.tag'
+  override-value:
+    description: 'value to override'
+    required: true
+
+outputs: {}
+  # random-number:
+  #   description: "Random number"
+  #   value: ${{ steps.random-number-generator.outputs.random-id }}
+
 runs:
   using: "composite"
   steps:
-    - run: echo Hello ${{ inputs.who-to-greet }}.
+    - name: Configure git for push
       shell: bash
-    - id: random-number-generator
-      run: echo "::set-output name=random-id::$(echo $RANDOM)"
-      shell: bash
-    - run: ${{ github.action_path }}/goodbye.sh
-      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        git config --global user.name "Deployment"
+        git config --global user.email "deploy-bot@7mind.de"
+        git clone --depth 1 https://$GITHUB_ACTOR:$GITHUB_TOKEN@github.com/${{ inputs.helm-repo-url-path }}.git /helm-repo
+        ls /
+    # - id: random-number-generator
+    #   run: echo "::set-output name=random-id::$(echo $RANDOM)"
+    #   shell: bash
+    # - run: ${{ github.action_path }}/goodbye.sh
+    #   shell: bash
