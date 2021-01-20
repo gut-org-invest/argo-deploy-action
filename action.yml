@@ -21,6 +21,9 @@ inputs:
   override-value:
     description: 'value to override'
     required: true
+  GITHUB_TOKEN:
+    description: 'Github Token to clone repo'
+    required: true
 
 outputs: {}
   # random-number:
@@ -32,12 +35,10 @@ runs:
   steps:
     - name: Configure git for push
       shell: bash
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         git config --global user.name "Deployment"
         git config --global user.email "deploy-bot@7mind.de"
-        git clone --depth 1 https://$GITHUB_ACTOR:$GITHUB_TOKEN@github.com/${{ inputs.helm-repo-url-path }}.git /helm-repo
+        git clone --depth 1 https://$GITHUB_ACTOR:${{ inputs.GITHUB_TOKEN }}@github.com/${{ inputs.helm-repo-url-path }}.git /helm-repo
         ls /
     # - id: random-number-generator
     #   run: echo "::set-output name=random-id::$(echo $RANDOM)"
