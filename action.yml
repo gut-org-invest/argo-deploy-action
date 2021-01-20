@@ -38,7 +38,7 @@ runs:
       run: |
         git config --global user.name "Deployment"
         git config --global user.email "deploy-bot@7mind.de"
-        git clone --depth 1 https://$GITHUB_ACTOR:${{ inputs.GITHUB_TOKEN }}@github.com/${{ inputs.helm-repo-url-path }} $GITHUB_WORKSPACE/helm
+        git clone https://$GITHUB_ACTOR:${{ inputs.GITHUB_TOKEN }}@github.com/${{ inputs.helm-repo-url-path }} $GITHUB_WORKSPACE/helm
         ls $GITHUB_WORKSPACE
     # - id: random-number-generator
     #   run: echo "::set-output name=random-id::$(echo $RANDOM)"
