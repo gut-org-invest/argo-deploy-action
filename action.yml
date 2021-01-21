@@ -33,13 +33,14 @@ outputs: {}
 runs:
   using: "composite"
   steps:
-    - uses: actions/checkout@master
-      with:
-        name: ${{ inputs.helm-repo-url-path }}.git
-        ref: refs/heads/argo
-        path: 'helm'
-        fetch-depth: 1
 
+    - name: Configure git for push
+      shell: bash
+      run: |
+        git config --global user.name "Deployment"
+        git config --global user.email "deploy-bot@7mind.de"
+        git clone --depth 1 --single-branch --branch refs/heads/argo https://$GITHUB_ACTOR:${{ inputs.GITHUB_TOKEN }}@github.com/${{ inputs.helm-repo-url-path }}.git $GITHUB_WORKSPACE/helm
+        ls $GITHUB_WORKSPACE
     # - id: random-number-generator
     #   run: echo "::set-output name=random-id::$(echo $RANDOM)"
     #   shell: bash
