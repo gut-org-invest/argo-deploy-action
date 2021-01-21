@@ -7,9 +7,9 @@ inputs:
     description: 'URL path of the repository holding the helm chart definitions in the format sevemind/kubernetes'
     required: true
   helm-repo-branch:
-    description: 'Helm repo branch to work on like refs/heads/release'
+    description: 'Helm repo branch to work on'
     required: true
-    default: refs/heads/release
+    default: master
   chart-path:
     description: 'Path inside the helm-repo to a specific chart'
     required: false
@@ -39,7 +39,7 @@ runs:
       run: |
         git config --global user.name "Deployment"
         git config --global user.email "deploy-bot@7mind.de"
-        git clone --depth 1 --single-branch --branch refs/heads/argo https://$GITHUB_ACTOR:${{ inputs.GITHUB_TOKEN }}@github.com/${{ inputs.helm-repo-url-path }}.git $GITHUB_WORKSPACE/helm
+        git clone --depth 1 --single-branch --branch ${{ inputs.helm-repo-branch }} https://$GITHUB_ACTOR:${{ inputs.GITHUB_TOKEN }}@github.com/${{ inputs.helm-repo-url-path }}.git $GITHUB_WORKSPACE/helm
         ls $GITHUB_WORKSPACE
     # - id: random-number-generator
     #   run: echo "::set-output name=random-id::$(echo $RANDOM)"
