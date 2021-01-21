@@ -34,13 +34,26 @@ runs:
   using: "composite"
   steps:
 
-    - name: Configure git for push
+    - name: Clone helm repository
       shell: bash
       run: |
         git config --global user.name "Deployment"
         git config --global user.email "deploy-bot@7mind.de"
         git clone --depth 1 --single-branch --branch ${{ inputs.helm-repo-branch }} https://$GITHUB_ACTOR:${{ inputs.GITHUB_TOKEN }}@github.com/${{ inputs.helm-repo-url-path }}.git $GITHUB_WORKSPACE/helm
-        ls $GITHUB_WORKSPACE
+
+    - name: Apply override
+      shell: bash
+      run: |
+        echo "${{ inputs.override-key }}: ${{ inputs.override-value }}" >> helm/${{ inputs.chart-path }}/values-override.yaml
+
+    - name: Commit and push
+      shell: bash
+      run: |
+        git add -A
+        git commit -m "New Deployment"
+        git push
+
+
     # - id: random-number-generator
     #   run: echo "::set-output name=random-id::$(echo $RANDOM)"
     #   shell: bash
