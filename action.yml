@@ -48,7 +48,7 @@ runs:
         echo "🚀 applying override"
         cat << EOF > helm/${{ inputs.chart-path }}/values-${{ inputs.deploy-environment }}-tag.yaml
         image:
-          tag: ${{ inputs.override-value }}
+          tag: ${{ inputs.deploy-image-tag }}
         EOF
 
     - name: Commit and push
