@@ -14,17 +14,13 @@ inputs:
     description: 'Environment to deploy to'
     required: false
     default: production
+  deploy-image-tag:
+    description: 'new image tag to deploy to environment'
+    required: true
   chart-path:
     description: 'Path inside the helm-repo to a specific chart'
     required: false
     default: "/"
-  override-key:
-    description: 'key to override'
-    required: true
-    default: 'image:\n  tag'
-  override-value:
-    description: 'value to override'
-    required: true
   GITHUB_TOKEN:
     description: 'Github Token to clone repo'
     required: true
@@ -50,7 +46,10 @@ runs:
       shell: bash
       run: |
         echo "🚀 applying override"
-        echo "${{ inputs.override-key }}: ${{ inputs.override-value }}" > helm/${{ inputs.chart-path }}/values-${{ inputs.deploy-environment }}-tag.yaml
+        cat << EOF > helm/${{ inputs.chart-path }}/values-${{ inputs.deploy-environment }}-tag.yaml
+        image:
+          tag: ${{ inputs.override-value }}
+        EOF
 
     - name: Commit and push
       shell: bash
