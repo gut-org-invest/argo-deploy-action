@@ -1,15 +1,19 @@
-name: 'Hello World'
-description: 'Greet someone'
+name: 'Helm Deployment Update'
+description: 'Override image.tag'
 
 inputs:
 
-  helm-repo-url-path:
-    description: 'URL path of the repository holding the helm chart definitions in the format sevemind/kubernetes'
+  helm-github-repo:
+    description: 'URL path of the repository holding the helm chart definitions in the format sevenmind/kubernetes'
     required: true
   helm-repo-branch:
     description: 'Helm repo branch to work on'
     required: true
     default: master
+  deploy-environment:
+    description: 'Environment to deploy to'
+    required: false
+    default: production
   chart-path:
     description: 'Path inside the helm-repo to a specific chart'
     required: false
@@ -40,13 +44,13 @@ runs:
         echo "🚀 cloning helm repository"
         git config --global user.name "Deployment"
         git config --global user.email "developer@7mind.de"
-        git clone --depth 1 --single-branch --branch ${{ inputs.helm-repo-branch }} https://$GITHUB_ACTOR:${{ inputs.GITHUB_TOKEN }}@github.com/${{ inputs.helm-repo-url-path }}.git $GITHUB_WORKSPACE/helm
+        git clone --depth 1 --single-branch --branch ${{ inputs.helm-repo-branch }} https://$GITHUB_ACTOR:${{ inputs.GITHUB_TOKEN }}@github.com/${{ inputs.helm-github-repo }}.git $GITHUB_WORKSPACE/helm
 
     - name: Apply override
       shell: bash
       run: |
         echo "🚀 applying override"
-        echo "${{ inputs.override-key }}: ${{ inputs.override-value }}" > helm/${{ inputs.chart-path }}/values-override.yaml
+        echo "${{ inputs.override-key }}: ${{ inputs.override-value }}" > helm/${{ inputs.chart-path }}/values-${{ inputs.deploy-environment }}-tag.yaml
 
     - name: Commit and push
       shell: bash
@@ -57,9 +61,3 @@ runs:
         git commit -m "New Deployment"
         git push
 
-
-    # - id: random-number-generator
-    #   run: echo "::set-output name=random-id::$(echo $RANDOM)"
-    #   shell: bash
-    # - run: ${{ github.action_path }}/goodbye.sh
-    #   shell: bash
