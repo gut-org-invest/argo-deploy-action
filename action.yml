@@ -21,7 +21,7 @@ inputs:
   override-key:
     description: 'key to override'
     required: true
-    default: 'image.tag'
+    default: 'image:\n  tag'
   override-value:
     description: 'value to override'
     required: true
