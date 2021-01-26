@@ -53,7 +53,7 @@ runs:
         image:
           tag: ${{ inputs.deploy-image-tag }}
         postUpgradeHook:
-          deploymentId: ${{ inputs.github-deployment-id | quote }}
+          deploymentId: "${{ inputs.github-deployment-id }}"
         EOF
 
     - name: Commit and push
