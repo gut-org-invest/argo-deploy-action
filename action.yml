@@ -17,6 +17,9 @@ inputs:
   deploy-image-tag:
     description: 'new image tag to deploy to environment'
     required: true
+  github-deployment-id:
+    description: identifier of the tracking deployment
+    required: false
   chart-path:
     description: 'Path inside the helm-repo to a specific chart'
     required: false
@@ -49,6 +52,8 @@ runs:
         cat << EOF > helm/${{ inputs.chart-path }}/values-${{ inputs.deploy-environment }}-tag.yaml
         image:
           tag: ${{ inputs.deploy-image-tag }}
+        postUpgradeHook:
+          deploymentId: ${{ inputs.github-deployment-id }}
         EOF
 
     - name: Commit and push
