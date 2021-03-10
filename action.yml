@@ -42,7 +42,7 @@ runs:
       run: |
         echo "🚀 cloning helm repository"
         git config --global user.name "Deployment"
-        git config --global user.email "developer@7mind.de"
+        git config --global user.email "benjamin@themothernature.app"
         git clone --depth 1 --single-branch --branch ${{ inputs.helm-repo-branch }} https://$GITHUB_ACTOR:${{ inputs.GITHUB_TOKEN }}@github.com/${{ inputs.helm-github-repo }}.git $GITHUB_WORKSPACE/helm
 
     - name: Apply override
