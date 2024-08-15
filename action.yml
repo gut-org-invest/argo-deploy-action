@@ -18,10 +18,10 @@ inputs:
     required: false
     default: production
   deploy-image-tag:
-    description: 'new image tag to deploy to environment'
+    description: 'Image tag to deploy'
     required: true
   github-deployment-id:
-    description: identifier of the tracking deployment
+    description: 'Github Deployment Id'
     required: false
   chart-path:
     description: 'Path inside the helm-repo to a specific chart'
@@ -35,9 +35,6 @@ inputs:
     required: true
 
 outputs: {}
-  # random-number:
-  #   description: "Random number"
-  #   value: ${{ steps.random-number-generator.outputs.random-id }}
 
 runs:
   using: "composite"
