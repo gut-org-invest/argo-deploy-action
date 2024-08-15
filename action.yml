@@ -3,13 +3,16 @@ description: 'Override image.tag'
 
 inputs:
 
+  helm-github-org:
+    description: 'Organization/Owner of the repository holding the helm chart definitions'
+    required: true
   helm-github-repo:
-    description: 'URL path of the repository holding the helm chart definitions in the format sevenmind/kubernetes'
+    description: 'Repository holding the helm chart definitions'
     required: true
   helm-repo-branch:
-    description: 'Helm repo branch to work on'
+    description: 'Branch of the helm repo to checkout'
     required: true
-    default: master
+    default: main
   deploy-environment:
     description: 'Environment to deploy to'
     required: false
@@ -45,7 +48,7 @@ runs:
       with:
         app-id: ${{ inputs.github-app-id }}
         private-key: ${{ inputs.github-app-private-key }}
-        owner: ${{ github.repository_owner }}
+        owner: ${{ inputs.helm-github-org }}
         repositories: "${{ inputs.helm-github-repo }}"
 
     - name: Get GitHub App User ID
@@ -58,7 +61,7 @@ runs:
     - name: Checkout helm repo
       uses: actions/checkout@v4
       with:
-        repository: ${{ inputs.helm-github-repo }}
+        repository: ${{ inputs.helm-github-org }}/${{ inputs.helm-github-repo }}
         ref: ${{ inputs.helm-repo-branch }}
         path: $GITHUB_WORKSPACE/helm
         token: ${{ steps.app-token.outputs.token }}
