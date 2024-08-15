@@ -24,8 +24,8 @@ inputs:
     description: 'Path inside the helm-repo to a specific chart'
     required: false
     default: "/"
-  GITHUB_TOKEN:
-    description: 'Github Token to clone repo'
+  OAUTH_ACCESS_TOKEN:
+    description: 'Github App Token to clone repo'
     required: true
 
 outputs: {}
@@ -42,8 +42,8 @@ runs:
       run: |
         echo "🚀 cloning helm repository"
         git config --global user.name "Deployment"
-        git config --global user.email "benjamin@themothernature.app"
-        git clone --depth 1 --single-branch --branch ${{ inputs.helm-repo-branch }} https://$GITHUB_ACTOR:${{ inputs.GITHUB_TOKEN }}@github.com/${{ inputs.helm-github-repo }}.git $GITHUB_WORKSPACE/helm
+        git config --global user.email "benjamin.gaertig@bcause.com"
+        git clone --depth 1 --single-branch --branch ${{ inputs.helm-repo-branch }} https://oauth2:${{ inputs.OAUTH_ACCESS_TOKEN }}@github.com/${{ inputs.helm-github-repo }}.git $GITHUB_WORKSPACE/helm
 
     - name: Apply override
       shell: bash
