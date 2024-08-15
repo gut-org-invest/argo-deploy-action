@@ -63,14 +63,13 @@ runs:
       with:
         repository: ${{ inputs.helm-github-org }}/${{ inputs.helm-github-repo }}
         ref: ${{ inputs.helm-repo-branch }}
-        path: $GITHUB_WORKSPACE/helm
         token: ${{ steps.app-token.outputs.token }}
 
     - name: Apply override
       shell: bash
       run: |
         echo "🚀 applying override"
-        cat << EOF > helm/${{ inputs.chart-path }}/values-${{ inputs.deploy-environment }}-tag.yaml
+        cat << EOF > ${{ inputs.chart-path }}/values-${{ inputs.deploy-environment }}-tag.yaml
         image:
           tag: ${{ inputs.deploy-image-tag }}
         postUpgradeHook:
