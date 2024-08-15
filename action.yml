@@ -37,13 +37,13 @@ runs:
   using: "composite"
   steps:
 
-    - name: Clone helm repository
-      shell: bash
-      run: |
-        echo "🚀 cloning helm repository"
-        git config --global user.name "Deployment"
-        git config --global user.email "benjamin.gaertig@bcause.com"
-        git clone --depth 1 --single-branch --branch ${{ inputs.helm-repo-branch }} https://oauth2:${{ inputs.OAUTH_ACCESS_TOKEN }}@github.com/${{ inputs.helm-github-repo }}.git $GITHUB_WORKSPACE/helm
+    - name: Checkout helm repo
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ inputs.helm-github-repo }}
+        ref: ${{ inputs.helm-repo-branch }}
+        path: $GITHUB_WORKSPACE/helm
+        token: ${{ inputs.OAUTH_ACCESS_TOKEN }}
 
     - name: Apply override
       shell: bash
@@ -61,6 +61,8 @@ runs:
       working-directory: helm
       run: |
         echo "🚀 commit & push"
+        git config --global user.name "Deployment"
+        git config --global user.email "benjamin.gaertig@bcause.com"
         git add -A
         git commit -m "New Deployment"
         git push
