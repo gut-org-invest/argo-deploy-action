@@ -116,6 +116,86 @@ runs:
       env:
         GH_TOKEN: ${{ steps.app-token.outputs.token }}
 
+    - name: Check required checks status
+      if: inputs.pr-number != '' && (inputs.admin-bypass != 'true' || steps.check-admin-bypass.outputs.bypass != 'true')
+      id: check-required-checks
+      shell: bash
+      run: |
+        echo "🔍 Checking required checks status for PR #${{ inputs.pr-number }}"
+
+        # Get the target branch for this PR
+        target_branch="${{ inputs.target-branch }}"
+        echo "Target branch: $target_branch"
+
+        # Fetch branch protection rules for the target branch
+        echo "📋 Fetching branch protection rules..."
+        protection_data=$(gh api "repos/${{ github.repository }}/branches/$target_branch/protection" --jq '.required_status_checks.contexts // []')
+
+        if [ -z "$protection_data" ] || [ "$protection_data" = "[]" ]; then
+          echo "ℹ️ No required checks configured for branch '$target_branch' - skipping checks validation"
+          echo "checks-passed=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        echo "Required checks from branch protection:"
+        echo "$protection_data" | jq -r '.[]'
+
+        # Get PR checks status
+        echo "📋 Fetching PR checks status..."
+        checks_data=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" --jq '.[] | {name: .name, status: .status, conclusion: .conclusion}')
+
+        if [ -z "$checks_data" ]; then
+          echo "❌ No checks found for this commit"
+          exit 1
+        fi
+
+        echo "Found checks:"
+        echo "$checks_data" | jq -r '"• \(.name): \(.status)/\(.conclusion)"'
+
+        # Check each required check from branch protection
+        failed_checks=()
+        required_checks_list=$(echo "$protection_data" | jq -r '.[]')
+
+        while IFS= read -r required_check; do
+          if [ -n "$required_check" ]; then
+            echo "Checking required check: '$required_check'"
+
+            # Find the check by exact name match first, then case-insensitive
+            check_status=$(echo "$checks_data" | jq -r --arg name "$required_check" 'select(.name == $name) | .conclusion')
+            if [ -z "$check_status" ]; then
+              # Try case-insensitive match
+              check_status=$(echo "$checks_data" | jq -r --arg name "$required_check" 'select(.name | test($name; "i")) | .conclusion')
+            fi
+
+            if [ -z "$check_status" ]; then
+              echo "❌ Required check '$required_check' not found"
+              failed_checks+=("$required_check (not found)")
+            elif [ "$check_status" = "success" ]; then
+              echo "✅ Required check '$required_check' passed"
+            else
+              echo "❌ Required check '$required_check' failed with status: $check_status"
+              failed_checks+=("$required_check ($check_status)")
+            fi
+          fi
+        done <<< "$required_checks_list"
+
+        if [ ${#failed_checks[@]} -gt 0 ]; then
+          echo "❌ Some required checks failed:"
+          printf "• %s\n" "${failed_checks[@]}"
+
+          # Post comment in PR
+          failed_checks_list=$(printf "• %s\n" "${failed_checks[@]}")
+          comment_body="🚫 **Deployment Blocked - Required Checks Failed**\n\nThis PR cannot be deployed because some required checks from branch protection rules have failed.\n\n**Failed checks:**\n$failed_checks_list\n\nPlease ensure all required checks pass before attempting to deploy."
+
+          gh api "repos/${{ github.repository }}/issues/${{ inputs.pr-number }}/comments" --method POST --field body="$comment_body"
+          exit 1
+        fi
+
+        echo "✅ All required checks have passed"
+        echo "checks-passed=true" >> "$GITHUB_OUTPUT"
+      env:
+        GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
     - name: Check if PR branch is up-to-date
       if: inputs.pr-number != '' && (inputs.admin-bypass != 'true' || steps.check-admin-bypass.outputs.bypass != 'true')
       id: check-branch-update
@@ -233,14 +313,15 @@ runs:
       id: handle-admin-bypass
       shell: bash
       run: |
-        echo "🚀 Admin bypass enabled - skipping PR approval and up-to-date checks"
+        echo "🚀 Admin bypass enabled - skipping PR approval, up-to-date checks, and required checks"
         echo "approved=true" >> "$GITHUB_OUTPUT"
         echo "up-to-date=true" >> "$GITHUB_OUTPUT"
+        echo "checks-passed=true" >> "$GITHUB_OUTPUT"
 
         # Post comment in PR about admin bypass (if PR number is provided)
         if [ -n "${{ inputs.pr-number }}" ]; then
           command_author="${{ inputs.command-author }}"
-          comment_body="🔓 **Admin Bypass Applied**\n\n@$command_author has admin privileges and is bypassing PR approval and up-to-date checks for this deployment.\n\n**Bypassed checks:**\n• PR approval requirement\n• Branch up-to-date requirement\n\nDeployment will proceed with admin override."
+          comment_body="🔓 **Admin Bypass Applied**\n\n@$command_author has admin privileges and is bypassing all safety checks for this deployment.\n\n**Bypassed checks:**\n• PR approval requirement\n• Branch up-to-date requirement\n• Required checks validation\n\nDeployment will proceed with admin override."
 
           gh api "repos/${{ github.repository }}/issues/${{ inputs.pr-number }}/comments" --method POST --field body="$comment_body"
         fi
@@ -255,7 +336,7 @@ runs:
         token: ${{ steps.app-token.outputs.token }}
 
     - name: Apply override
-      if: (inputs.pr-number == '' || steps.check-branch-update.outputs.up-to-date == 'true' || steps.handle-admin-bypass.outputs.up-to-date == 'true') && (inputs.pr-number == '' || steps.check-pr-approval.outputs.approved == 'true' || steps.handle-admin-bypass.outputs.approved == 'true')
+      if: (inputs.pr-number == '' || steps.check-branch-update.outputs.up-to-date == 'true' || steps.handle-admin-bypass.outputs.up-to-date == 'true') && (inputs.pr-number == '' || steps.check-pr-approval.outputs.approved == 'true' || steps.handle-admin-bypass.outputs.approved == 'true') && (steps.check-required-checks.outputs.checks-passed == 'true' || steps.handle-admin-bypass.outputs.checks-passed == 'true')
       shell: bash
       run: |
         echo "🚀 applying override"
@@ -267,7 +348,7 @@ runs:
         EOF
 
     - name: Commit and push
-      if: (inputs.pr-number == '' || steps.check-branch-update.outputs.up-to-date == 'true' || steps.handle-admin-bypass.outputs.up-to-date == 'true') && (inputs.pr-number == '' || steps.check-pr-approval.outputs.approved == 'true' || steps.handle-admin-bypass.outputs.approved == 'true')
+      if: (inputs.pr-number == '' || steps.check-branch-update.outputs.up-to-date == 'true' || steps.handle-admin-bypass.outputs.up-to-date == 'true') && (inputs.pr-number == '' || steps.check-pr-approval.outputs.approved == 'true' || steps.handle-admin-bypass.outputs.approved == 'true') && (steps.check-required-checks.outputs.checks-passed == 'true' || steps.handle-admin-bypass.outputs.checks-passed == 'true')
       shell: bash
       run: |
         git config --global user.name '${{ steps.app-token.outputs.app-slug }}[bot]'
