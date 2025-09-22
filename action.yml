@@ -58,46 +58,6 @@ runs:
   using: "composite"
   steps:
 
-    - name: Ensure GitHub CLI is installed (Linux)
-      if: runner.os == 'Linux'
-      shell: bash
-      run: |
-        if command -v gh >/dev/null 2>&1; then
-          echo "gh already installed"
-        else
-          echo "Installing GitHub CLI..."
-          sudo apt-get update
-          sudo apt-get install -y curl ca-certificates gnupg
-          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-          sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-          sudo apt-get update
-          sudo apt-get install -y gh
-        fi
-        gh --version
-
-    - name: Ensure GitHub CLI is installed (macOS)
-      if: runner.os == 'macOS'
-      shell: bash
-      run: |
-        if command -v gh >/dev/null 2>&1; then
-          echo "gh already installed"
-        else
-          brew install gh
-        fi
-        gh --version
-
-    - name: Ensure GitHub CLI is installed (Windows)
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        if (Get-Command gh -ErrorAction SilentlyContinue) {
-          Write-Host "gh already installed"
-        } else {
-          choco install gh -y
-        }
-        gh --version
-
     - uses: actions/create-github-app-token@v1
       id: app-token
       with:
