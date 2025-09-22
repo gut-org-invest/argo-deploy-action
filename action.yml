@@ -33,24 +33,6 @@ inputs:
   github-app-private-key:
     description: 'Github App private key for authentication'
     required: true
-  require-pr-approval:
-    description: 'Comma-separated list of environments that require PR approval (e.g., "production,staging")'
-    required: false
-    default: 'production'
-  pr-number:
-    description: 'Pull request number (required if current environment requires approval)'
-    required: false
-  target-branch:
-    description: 'Target branch to check if PR is up-to-date (e.g., main, master)'
-    required: false
-    default: 'main'
-  admin-bypass:
-    description: 'Allow admin users to bypass PR approval and up-to-date checks'
-    required: false
-    default: 'true'
-  command-author:
-    description: 'Username of the person who triggered the deployment (e.g., from slash command)'
-    required: false
 
 outputs: {}
 
@@ -73,180 +55,6 @@ runs:
       env:
         GH_TOKEN: ${{ steps.app-token.outputs.token }}
 
-    - name: Check admin bypass permissions
-      if: inputs.admin-bypass == 'true' && inputs.command-author != ''
-      id: check-admin-bypass
-      shell: bash
-      run: |
-        echo "🔍 Checking admin bypass permissions"
-
-        # Get the command author (person who triggered the deployment)
-        command_author="${{ inputs.command-author }}"
-        echo "Command author: $command_author"
-
-        # Fetch repository collaborators with admin permissions
-        echo "📋 Fetching repository admin users..."
-        admin_users=$(gh api "repos/${{ github.repository }}/collaborators" --jq '.[] | select(.permissions.admin == true) | .login')
-
-        if [ -z "$admin_users" ]; then
-          echo "❌ No admin users found in repository"
-          echo "bypass=false" >> "$GITHUB_OUTPUT"
-          exit 0
-        fi
-
-        echo "👥 Admin users found:"
-        echo "$admin_users"
-
-        # Check if command author is an admin
-        is_admin=false
-        while IFS= read -r admin; do
-          if [ "$admin" = "$command_author" ]; then
-            is_admin=true
-            break
-          fi
-        done <<< "$admin_users"
-
-        if [ "$is_admin" = "true" ]; then
-          echo "✅ Command author '$command_author' is an admin - bypassing checks"
-          echo "bypass=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "❌ Command author '$command_author' is not an admin - checks will be enforced"
-          echo "bypass=false" >> "$GITHUB_OUTPUT"
-        fi
-      env:
-        GH_TOKEN: ${{ steps.app-token.outputs.token }}
-
-    - name: Check if PR branch is up-to-date
-      if: inputs.pr-number != '' && (inputs.admin-bypass != 'true' || steps.check-admin-bypass.outputs.bypass != 'true')
-      id: check-branch-update
-      shell: bash
-      run: |
-        echo "🔍 Checking if PR #${{ inputs.pr-number }} branch is up-to-date with ${{ inputs.target-branch }}"
-
-        # Get PR details
-        pr_data=$(gh api "repos/${{ github.repository }}/pulls/${{ inputs.pr-number }}")
-        pr_head_sha=$(echo "$pr_data" | jq -r '.head.sha')
-        target_sha=$(echo "$pr_data" | jq -r '.base.sha')
-
-        echo "PR head SHA: $pr_head_sha"
-        echo "Target branch SHA: $target_sha"
-
-        # Check if PR branch is up-to-date with target branch
-        is_behind=$(gh api "repos/${{ github.repository }}/compare/$pr_head_sha...$target_sha" --jq '.behind_by')
-
-        if [ "$is_behind" -gt 0 ]; then
-          echo "❌ PR branch is $is_behind commits behind ${{ inputs.target-branch }}"
-
-          # Post comment in PR
-          comment_body="🚫 **Deployment Blocked - Branch Not Up-to-Date**\n\nThis PR cannot be deployed because the branch is $is_behind commits behind \`${{ inputs.target-branch }}\`.\n\nPlease update your branch with the latest changes from \`${{ inputs.target-branch }}\` before attempting to deploy.\n\n**To update your branch:**\n\`\`\`bash\ngit checkout ${{ inputs.target-branch }}\ngit pull origin ${{ inputs.target-branch }}\ngit checkout your-feature-branch\ngit merge ${{ inputs.target-branch }}\n# or: git rebase ${{ inputs.target-branch }}\ngit push origin your-feature-branch\n\`\`\`"
-
-          gh api "repos/${{ github.repository }}/issues/${{ inputs.pr-number }}/comments" --method POST --field body="$comment_body"
-          exit 1
-        fi
-
-        echo "✅ PR branch is up-to-date with ${{ inputs.target-branch }}"
-        echo "up-to-date=true" >> "$GITHUB_OUTPUT"
-      env:
-        GH_TOKEN: ${{ steps.app-token.outputs.token }}
-
-    - name: Check PR approval for deployments
-      if: inputs.pr-number != '' && (inputs.admin-bypass != 'true' || steps.check-admin-bypass.outputs.bypass != 'true')
-      id: check-pr-approval
-      shell: bash
-      run: |
-        # Check if current environment requires PR approval
-        environments_requiring_approval=$(echo "${{ inputs.require-pr-approval }}" | tr ',' ' ')
-        current_env="${{ inputs.deploy-environment }}"
-
-        requires_approval=false
-        for env in $environments_requiring_approval; do
-          if [ "$env" = "$current_env" ]; then
-            requires_approval=true
-            break
-          fi
-        done
-
-        if [ "$requires_approval" = "false" ]; then
-          echo "✅ Environment '$current_env' does not require PR approval"
-          echo "approved=true" >> "$GITHUB_OUTPUT"
-          exit 0
-        fi
-
-        echo "🔍 Environment '$current_env' requires PR approval"
-
-        if [ -z "${{ inputs.pr-number }}" ]; then
-          echo "❌ PR number is required for environment '$current_env'"
-          exit 1
-        fi
-
-        echo "🔍 Checking PR approval status for PR #${{ inputs.pr-number }}"
-
-        # Get PR reviews and filter out bots
-        reviews=$(gh api "repos/${{ github.repository }}/pulls/${{ inputs.pr-number }}/reviews" --jq '.[] | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED") | {state: .state, user: .user.login, user_type: .user.type, submitted_at: .submitted_at}')
-
-        if [ -z "$reviews" ]; then
-          echo "❌ No reviews found for PR #${{ inputs.pr-number }}"
-          exit 1
-        fi
-
-        # Filter out bot reviewers (type: "Bot" or common bot patterns)
-        human_reviews=$(echo "$reviews" | jq -r 'select(.user_type == "User" and (.user | test(".*bot.*|.*copilot.*|.*cursor.*|.*github.*|.*dependabot.*|.*renovate.*|.*automated.*|.*ci.*|.*action.*|.*workflow.*|.*app.*"; "i") | not))')
-
-        if [ -z "$human_reviews" ]; then
-          echo "❌ No human reviews found for PR #${{ inputs.pr-number }}"
-          echo "All reviews found:"
-          echo "$reviews" | jq -r '"\(.state): \(.user) (\(.user_type)) at \(.submitted_at)"'
-
-          # Post comment in PR
-          reviews_list=$(echo "$reviews" | jq -r '"• \(.state): @\(.user) (\(.user_type)) at \(.submitted_at)"')
-          comment_body="🚫 **Production Deployment Blocked**\n\nThis PR cannot be deployed to production because it requires approval from a human reviewer, but only bot reviews were found.\n\n**Reviews found:**\n$reviews_list\n\nPlease have a human team member review and approve this PR before attempting to deploy to production."
-          gh api "repos/${{ github.repository }}/issues/${{ inputs.pr-number }}/comments" --method POST --field body="$comment_body"
-          exit 1
-        fi
-
-        # Check if there's at least one human approval
-        human_approved=$(echo "$human_reviews" | jq -r 'select(.state == "APPROVED") | .user' | head -1)
-
-        if [ -z "$human_approved" ]; then
-          echo "❌ PR #${{ inputs.pr-number }} has not been approved by a human reviewer"
-          echo "Human reviews found:"
-          echo "$human_reviews" | jq -r '"\(.state): \(.user) at \(.submitted_at)"'
-          echo ""
-          echo "Bot reviews (excluded):"
-          echo "$reviews" | jq -r 'select(.user_type == "Bot" or (.user | test(".*bot.*|.*copilot.*|.*cursor.*|.*github.*|.*dependabot.*|.*renovate.*|.*automated.*|.*ci.*|.*action.*|.*workflow.*|.*app.*"; "i"))) | "\(.state): \(.user) (\(.user_type)) at \(.submitted_at)"'
-
-          # Post comment in PR
-          human_reviews_list=$(echo "$human_reviews" | jq -r '"• \(.state): @\(.user) at \(.submitted_at)"')
-          bot_reviews_list=$(echo "$reviews" | jq -r 'select(.user_type == "Bot" or (.user | test(".*bot.*|.*copilot.*|.*cursor.*|.*github.*|.*dependabot.*|.*renovate.*|.*automated.*|.*ci.*|.*action.*|.*workflow.*|.*app.*"; "i"))) | "• \(.state): @\(.user) (\(.user_type)) at \(.submitted_at)"')
-          comment_body="🚫 **Production Deployment Blocked**\n\nThis PR cannot be deployed to production because it requires approval from a human reviewer.\n\n**Human reviews found:**\n$human_reviews_list\n\n**Bot reviews (excluded):**\n$bot_reviews_list\n\nPlease have a human team member review and approve this PR before attempting to deploy to production."
-          gh api "repos/${{ github.repository }}/issues/${{ inputs.pr-number }}/comments" --method POST --field body="$comment_body"
-          exit 1
-        fi
-
-        echo "✅ PR #${{ inputs.pr-number }} has been approved by human reviewer: $human_approved"
-        echo "approved=true" >> "$GITHUB_OUTPUT"
-      env:
-        GH_TOKEN: ${{ steps.app-token.outputs.token }}
-
-    - name: Handle admin bypass
-      if: inputs.admin-bypass == 'true' && inputs.command-author != '' && steps.check-admin-bypass.outputs.bypass == 'true'
-      id: handle-admin-bypass
-      shell: bash
-      run: |
-        echo "🚀 Admin bypass enabled - skipping PR approval and up-to-date checks"
-        echo "approved=true" >> "$GITHUB_OUTPUT"
-        echo "up-to-date=true" >> "$GITHUB_OUTPUT"
-
-        # Post comment in PR about admin bypass (if PR number is provided)
-        if [ -n "${{ inputs.pr-number }}" ]; then
-          command_author="${{ inputs.command-author }}"
-          comment_body="🔓 **Admin Bypass Applied**\n\n@$command_author has admin privileges and is bypassing PR approval and up-to-date checks for this deployment.\n\n**Bypassed checks:**\n• PR approval requirement\n• Branch up-to-date requirement\n\nDeployment will proceed with admin override."
-
-          gh api "repos/${{ github.repository }}/issues/${{ inputs.pr-number }}/comments" --method POST --field body="$comment_body"
-        fi
-      env:
-        GH_TOKEN: ${{ steps.app-token.outputs.token }}
-
     - name: Checkout helm repo
       uses: actions/checkout@v4
       with:
@@ -255,7 +63,6 @@ runs:
         token: ${{ steps.app-token.outputs.token }}
 
     - name: Apply override
-      if: (inputs.pr-number == '' || steps.check-branch-update.outputs.up-to-date == 'true' || steps.handle-admin-bypass.outputs.up-to-date == 'true') && (inputs.pr-number == '' || steps.check-pr-approval.outputs.approved == 'true' || steps.handle-admin-bypass.outputs.approved == 'true')
       shell: bash
       run: |
         echo "🚀 applying override"
@@ -267,7 +74,6 @@ runs:
         EOF
 
     - name: Commit and push
-      if: (inputs.pr-number == '' || steps.check-branch-update.outputs.up-to-date == 'true' || steps.handle-admin-bypass.outputs.up-to-date == 'true') && (inputs.pr-number == '' || steps.check-pr-approval.outputs.approved == 'true' || steps.handle-admin-bypass.outputs.approved == 'true')
       shell: bash
       run: |
         git config --global user.name '${{ steps.app-token.outputs.app-slug }}[bot]'
